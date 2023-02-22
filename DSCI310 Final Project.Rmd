@@ -1,0 +1,1277 @@
+---
+title: "DSCI310 Final Project"
+author: "Nisi Mohan Kuniyil 300321388"
+date: "09/12/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(cache = FALSE)
+```
+
+```{r, echo=FALSE, cache=FALSE}
+library(stringr)
+library(fastDummies)
+library(GGally)
+library(e1071)
+library(ggplot2)
+library(graphics)
+library(plyr)
+library(dplyr)
+library(hrbrthemes)
+library(zoo)
+
+#library(purrr)
+#library(tidyverse)
+
+```
+
+# Problem Statement
+
+**Analysis of COVID-19 and the impact of COVID on US Stock Market Indices**
+
+The novel coronavirus is taking a toll on people’s lives every day. The pandemic’s impact on the global economy
+has been significant. Countries going into complete lockdowns in order to reduce the spread of the virus
+has had a major adverse effect on the economy overall. Analyzing COVID factors such as Infection rate,
+the mortality rate would give an overall idea about the trend of the disease over the past months. The intend of
+this project is to analyze the spread of the disease in the US compared to a few other major countries where
+a serious spread was observed. Also, analyze the impact of various factors related to COVID on the US stock
+market by studying a few indices.
+
+# Solution
+
+
+## Question1: 
+
+
+First, We study the COVID curve in the US comparing with Spain, Japan, Italy, and China. The below curve shows the cumulative confirmed cases of all the countries in the study between January 2020 and December 2020. From this, we can see that there is an exponential growth in the number of cases in the US compared to other countries. While the curve has started to flatten in other countries, in the US, the number of cases is still rising.
+
+
+![ COVID Curve](C:/Users/nisik/Workspace/DSCI310/MyWork/Final/Picture1.png){width=80%}
+
+
+
+
+This significant difference in the US can be clearly observed by visualizing the "Daily Confirmed Cases" in all the countries. The US daily confirmed cases are still rising exponentially while in the other countries it has significantly come down.
+
+
+
+![ COVID Daily Cases](C:/Users/nisik/Workspace/DSCI310/MyWork/Final/daily_covid_cases_global.png){width=80%}
+
+
+Furthermore, we can analyze the rate of spread by visualizing the daily percentage change in confirmed cases. The trend here shows that in terms of percentage the spread of the disease was significantly high at the beginning of the period.   
+
+
+
+![ COVID Case Perc Change Curve](C:/Users/nisik/Workspace/DSCI310/MyWork/Final/Picture2.png){width=80%} 
+
+
+Next, we analyze the COVID death curve. Overall, this curve also follows the same trend as the total cases. The US is having a large number of deaths when taking the overall period from January 2020 to December 2020. Other countries have very less death reported due to COVID.         
+
+
+
+![ COVID Death  Curve](C:/Users/nisik/Workspace/DSCI310/MyWork/Final/Picture3.png){width=80%}    
+
+
+
+Below is a plot of the percentage change in death and the pattern is different than the percentage change in cases. Here percentage change in death is recorded more in the US during the initial period, whereas in the case of the percentage change in confirmed cases, Italy had the highest peak for percentage change.    
+
+
+![ COVID Death Perc Change Curve](C:/Users/nisik/Workspace/DSCI310/MyWork/Final/Picture4.png){width=80%}       
+
+
+
+Next, we analyze the death rate of infected cases. From the below curve we could say that even though there was an initial peak in the US, Overall, Italy and Spain had the largest death rate recorded. The trend observed in all countries is similar. That is the death rate has come down significantly towards the end of the period.      
+
+
+![ COVID Death Rate Curve](C:/Users/nisik/Workspace/DSCI310/MyWork/Final/Picture5.png){width=80%}      
+
+\newpage
+
+## Question2:
+
+Here we analyze different COVID factors state-wise. We also study the potential relationship between the population and the spread of the disease.
+
+We start off by understanding the distribution of state-wise population in the US. From the below bar chart we can identify the highest and lowest population in states. To check if any relationship exists between infection rate and population, we choose California and Texas, which have the highest population, and DC and Wyoming which have the lowest population.
+
+
+
+
+```{r,echo=FALSE}
+
+USCovid <- read.csv("all-states-history.csv")
+UScovid_df <- USCovid[,c("date","state","death","hospitalized","positive","totalTestResults")]
+UScovid_df$date <- as.Date(UScovid_df$date, format="%d-%m-%Y")
+UScovid_df <- filter(UScovid_df, date >= as.Date("2020-03-01"))
+#head(UScovid_df)
+```
+
+```{r,echo=FALSE}
+positive_df <- UScovid_df[, c("date", "state", "positive")]
+
+positive_df_wide <- reshape(positive_df, timevar="state", idvar="date", direction="wide")
+
+#which(positive_df_wide==0)
+```
+
+
+```{r, echo=FALSE}
+
+perfcarsales<- read.csv("PerfCarSales.csv")
+pop<- perfcarsales[,c("ï..State","Abb","Population")]
+pop <- pop %>% dplyr::rename(state = Abb)
+```
+
+```{r,echo=FALSE}
+PopDensity <- read.csv("PopulationDensity.csv")
+PopDensity <- PopDensity %>% dplyr::rename(ï..State = GEO.display.label,  PopDensityPerMiles = Density.per.square.mile.of.land.area )
+PopDensity<- PopDensity[, c("ï..State", "PopDensityPerMiles")]
+
+
+```
+
+
+
+```{r,echo=FALSE}
+population_df <- plyr::join(pop, PopDensity, by="ï..State")
+
+```
+
+
+
+```{r,echo=FALSE}
+
+
+UScovid_df <- plyr::join(UScovid_df, population_df, by = "state")
+UScovid_df <- filter(UScovid_df, !(state %in% c("AS", "MP", "GU", "PR", "VI")))
+UScovid_df <- UScovid_df[,-7] 
+#head(UScovid_df)
+
+```
+
+
+
+```{r,echo=FALSE}
+
+
+UScovid_df$InfectionRate <- (UScovid_df$positive/UScovid_df$Population)*100
+
+UScovid_df$PosTestRate <- (UScovid_df$positive/ UScovid_df$totalTestResults)*100
+
+UScovid_df$DeathRate <- (UScovid_df$death/ UScovid_df$positive)*100
+
+
+```
+
+
+```{r,echo=FALSE}
+infection_rate_df <- UScovid_df[,c("date", "state", "InfectionRate")]
+infection_rate_df <- infection_rate_df[order(as.numeric(rownames(infection_rate_df)), decreasing = TRUE),]
+infection_rate_df[is.na(infection_rate_df)] <- 0
+#head(infection_rate_df)
+
+```
+
+
+```{r,echo=FALSE}
+sorted_population_df <- population_df[order(population_df$Population, decreasing=TRUE),]
+sorted_population_df$state <- factor(sorted_population_df$state, levels=sorted_population_df$state)
+#head(sorted_population_df)
+```
+
+
+```{r,echo=FALSE}
+# Draw plot
+ggplot(sorted_population_df, aes(x=state, y=Population)) + 
+  geom_bar(stat="identity", width=.5, fill="tomato3") + 
+  labs(
+    title="Ordered Bar Chart",
+    subtitle="",
+    x="US States", 
+    y="Population") + 
+  theme(axis.text.x = element_text(angle=65, vjust=0.6))
+```
+
+
+We then visualize the infection rates of the 4 states. From the line chart, we can only observe that the state with the lowest population size, Wyoming had a very low spread in the initial period but exponentially rose towards the end. From this chart, it is unable to come to the conclusion that any correlation exists between population and infection rate.
+
+
+
+```{r,echo=FALSE}
+infection_rate_df_filtered <- filter(infection_rate_df, state %in% c("CA", "TX", "DC", "WY"))
+ggplot(data=infection_rate_df_filtered, aes(x=date, y=InfectionRate, colour=state)) +
+  labs(
+    title="Infection Rate Vs Date",
+    subtitle="",
+    x="Date", 
+    y="Infection Rate")+
+  geom_line()
+```
+
+
+Furthermore, to get more idea about the relationship between infection rate and population we plot a scatter plot by taking the cumulative infection rate. We expect that when the population increases the infection rate will also increase. However, the below chart does not show strong evidence that supports our hypothesis.
+
+
+
+
+```{r,echo=FALSE}
+infection_rate_with_pop <- UScovid_df[,c("date", "state", "InfectionRate", "Population")]
+cumulative_infection_rate <- filter(infection_rate_with_pop, date == as.Date("2020-12-03"))
+#head(cumulative_infection_rate)
+```
+
+
+```{r, echo=FALSE}
+
+# Plot
+ggplot(cumulative_infection_rate)  + 
+  geom_point(aes(x=Population, y=InfectionRate, col= state)) +   # draw points
+  labs(
+    y="InfectionRate", 
+    x="Population", 
+    title="InfectionRate Vs Population" )
+```
+
+
+
+
+## Population Density and Daily Infection Rate Analysis 
+
+
+Since population density seems like a more accurate way to study the relationship between population and disease, we now compare the population density of all the states with infection rate. The below bar chart shows the distribution of population density by each state in the US. From this chart, we can identify that DC and New Jersey have the highest, and Wyoming and Alaska have the lowest population density.
+ 
+
+```{r,echo=FALSE}
+sorted_pop_density_df <- population_df[order(population_df$PopDensityPerMiles, decreasing = TRUE),]
+sorted_pop_density_df$state <- factor(sorted_pop_density_df$state, levels=sorted_pop_density_df$state)
+#head(sorted_pop_density_df)
+```
+
+
+
+```{r,echo=FALSE}
+ggplot(sorted_pop_density_df, aes(x=state, y=PopDensityPerMiles)) + 
+  geom_bar(stat="identity", width=.5, fill="tomato3") + 
+  labs(
+    title="Population Density by States",
+    x="States", 
+    y="Population Density per Miles") + 
+  theme(axis.text.x = element_text(angle=65, vjust=0.6))
+```
+
+
+
+A line chart is plotted to see if there is any relationship between population density and infection rate. We see the same trend that we had seen previously for the population chart here. Wyoming and Alaska are the least densely populated states had a very low infection rate during the initial stages, but later observed an exponential rise.
+
+
+
+```{r, echo=FALSE}
+infection_rate_df_filtered <- filter(infection_rate_df, state %in% c("DC", "NJ", "WY", "AK"))
+ggplot(data=infection_rate_df_filtered, aes(x=date, y=InfectionRate, colour=state)) +
+   labs(
+    title="Infection Rate Vs Date",
+    x="Date", 
+    y="Infection Rate")+
+  geom_line()
+```
+
+
+In addition, to get more idea about the relationship between infection rate and population density we plot a scatter plot by taking the cumulative infection rate. One might think that if the place is densely populated then the chance of infection rate will also be more. But, the chart shows no such relationship to conclude our assumption.
+
+
+
+```{r,echo=FALSE}
+infection_rate_with_pop_density <- UScovid_df[,c("date", "state", "InfectionRate", "PopDensityPerMiles")]
+cumulative_infection_rate <- filter(infection_rate_with_pop_density, date == as.Date("2020-12-03"))
+#head(cumulative_infection_rate)
+```
+
+
+```{r,echo=FALSE}
+# Plot
+ggplot(cumulative_infection_rate)  + 
+  geom_point(aes(x=PopDensityPerMiles, y=InfectionRate, col=state)) +   # draw points
+  xlim(0, 1500) + 
+  labs(
+    title="InfectionRate Vs PopulationDensity", 
+    y="InfectionRate", 
+    x="PopulationDensity"
+    
+   )
+```
+
+
+
+## Infection Rate weekly change 
+
+
+From the time series analysis above we could not conclude any definitive relationship between infection rate and population, population density. So, here we will analyze the weekly change in infection rate which can also be considered as to how the disease is spreading week over week, and see if we can find a pattern between states with high population density and states with low population density.
+
+
+```{r,echo=FALSE}
+infection_rate_df_wide <- reshape(infection_rate_df, timevar="state", idvar="date", direction="wide")
+infection_rate_df_wide[is.na(infection_rate_df_wide)] <- 0
+head(infection_rate_df_wide)
+```
+
+
+```{r, echo=FALSE}
+infection_rate_weekly_change <- data.frame(diff(as.matrix(infection_rate_df_wide[, -1]), lag=7))
+#head(infection_rate_weekly_change)
+```
+
+
+1. DC & New Jersey - Highest Population Density
+
+We can see the change of infection rate week over week is high. This indicates a faster spread where population density is higher.
+
+```{r,echo=FALSE}
+hist(infection_rate_weekly_change$InfectionRate.DC, col= "cyan", xlab="Change in Infection Rate",
+        main="Weekly Change Infection Rate of DC")
+```
+
+
+
+```{r,echo=FALSE}
+hist(infection_rate_weekly_change$InfectionRate.NJ, col= "cyan", xlab="Change in Infection Rate",
+        main="Weekly Change Infection Rate of NJ")
+```
+
+
+2. Wyoming & Alaska- Lowest Population Density
+
+We can see the change of infection rate week over week is low mostly concentrated towards 0. This indicates a slower spread where population density is lower.
+
+
+```{r,echo=FALSE}
+hist(infection_rate_weekly_change$InfectionRate.WY, col= "cyan", xlab="Change in Infection Rate",
+        main="Weekly Change Infection Rate of WY")
+```
+
+
+```{r, echo=FALSE}
+hist(infection_rate_weekly_change$InfectionRate.AK, col= "cyan", xlab="Change in Infection Rate",
+        main="Weekly Change Infection Rate of AK")
+```
+
+
+
+
+\newpage
+
+## Question3:  
+
+
+Next, we analyze the impact of COVID-19 on the US stock exchange. For this analysis, we have taken the S&P 500, the NASDAQ, the Russel 2000, and Crude oil futures indices. We will study if any correlation exists between the COVID infection rate time series and the returns time series of the four assets.
+
+First, we visualize the COVID-19 infection rate time series by plotting daily cases, the percentage change in cases, and the percent change in deaths for the period of March 2020 to December 2020.
+
+
+```{r,echo=FALSE}
+US_Covid_Overall <- UScovid_df %>% 
+  dplyr::group_by(date) %>% 
+  dplyr::summarise(
+    Death = sum(na.fill(death, 0)), 
+    Positive = sum(na.fill(positive, 0)), 
+    TotalTestResults = sum(na.fill(totalTestResults, 0))
+    )
+
+US_Covid_Overall <- US_Covid_Overall[order(as.Date(US_Covid_Overall$date, format="%d-%m-%Y")),]
+
+# Population 
+US_Population <- sum(population_df$Population)
+
+# Infection Rate and Death Rate
+US_Covid_Overall$InfectionRate <- US_Covid_Overall$Positive / US_Population
+US_Covid_Overall$DeathRate <- na.fill(US_Covid_Overall$Death / US_Covid_Overall$Positive, 0)
+
+# Handling "inf" values created because of division by 0
+US_Covid_Overall[which(!is.finite(US_Covid_Overall$DeathRate)), "DeathRate"] <- 0
+
+#head(US_Covid_Overall)
+
+```
+
+
+
+```{r,echo=FALSE}
+US_Covid_Overall <- US_Covid_Overall %>% mutate(DailyPositiveCases = (Positive - lag(Positive, 1)))
+ggplot(US_Covid_Overall, aes(x=as.Date(date, "%d-%m-%Y"), y=DailyPositiveCases)) + 
+  labs(
+    title="Daily Positve Cases",
+       x="Date", 
+    y="Daily Positive Cases")+
+  geom_line()
+```
+
+
+
+
+```{r,echo=FALSE}
+US_Covid_Overall <- US_Covid_Overall %>% mutate(InfectionRatePercChange = InfectionRate/lag(InfectionRate, 30) - 1)
+US_Covid_Overall <- US_Covid_Overall %>% mutate(DeathPercChange = Death/lag(Death, 30) - 1)
+
+#head(US_Covid_Overall)
+```
+
+
+```{r,echo=FALSE}
+ggplot(US_Covid_Overall, aes(x=as.Date(date, "%d-%m-%Y"), y=InfectionRatePercChange)) + 
+  labs(
+    title="% Change in Infection Rate",
+       x="Date", 
+    y="Infection Rate PercChange")+
+  geom_line()
+```
+
+
+
+```{r,echo=FALSE}
+ggplot(US_Covid_Overall, aes(x=as.Date(date, "%d-%m-%Y"), y=DeathPercChange)) + 
+  labs(
+    title=" % Change in Deaths",
+       x="Date", 
+    y="Death PercChange")+
+  geom_line()
+```
+
+All of the above charts show a similar trend. It can be seen that the first peak is around April. We can say that it's because the first wave of COVID happened around this time. Also, the positive case chart is based on daily cases and the infection rate and death plots are thirty day percentage changes. 
+
+
+
+## S&P 500
+
+
+To see if COVID has any impact on the S&P 500 market index we plot the Adj.Close during the period from March 2020 to December 2020. The line chart shows a dip around April. We have already observed from the daily positive case plot that the first peak was around this time. So we could say that there was a market crash when the first wave hit. This is probably because of the lockdown that was imposed in almost every part of the USA during the first wave of COVID-19. However, the market seems to have recovered afterward.
+
+To dig in deep, correlation of monthly percentage changes in infection rates and returns is computed. We have taken correlation of infectionrates percentage change and returns from March to December and we get correlation metric as **-0.5811911**. This value tells us there is a  negative correlation between those two. 
+
+```{r,echo=FALSE}
+sp_500_df <- read.csv("SP500.csv")
+sp_500_df$Date <- as.Date(sp_500_df$Date)
+#head(sp_500_df)
+```
+
+
+
+```{r,echo=FALSE}
+ggplot(sp_500_df, aes(x=as.Date(Date), y=Adj.Close)) + 
+  labs(
+    title="Daily Adj.Colse From March to December",
+       x="Date", 
+    y="Adj.close")+
+  geom_line()
+```
+
+
+
+```{r,echo=FALSE}
+sp_500_df <- sp_500_df %>% mutate(Returns = Adj.Close/lag(Adj.Close, 30) - 1)
+#head(sp_500_df)
+```
+
+
+
+```{r,echo=FALSE}
+compute_corr <- function(infection_rate_df, asset_returns_df, col, from, to){
+  
+ infection_rate_df <- filter(infection_rate_df, as.Date(Date) >= as.Date(from), as.Date(Date) <= as.Date(to))
+ asset_returns_df <- filter(asset_returns_df, as.Date(Date) >= as.Date(from), as.Date(Date) <= as.Date(to))
+ 
+ asset_returns_df <- plyr::join(asset_returns_df, infection_rate_df, by="Date")
+ asset_returns_df <- na.omit(asset_returns_df)
+ 
+ # Normalize
+ # asset_returns_df[,col] = (asset_returns_df[,col] - mean(asset_returns_df[,col]))/sd(asset_returns_df[,col])
+ 
+ correlation <- cor(asset_returns_df[,col], asset_returns_df$Returns)
+ 
+ #print(asset_returns_df)
+ # plot(asset_returns_df[,col], asset_returns_df$Returns)
+ 
+ return(correlation)
+}
+```
+
+
+**Correlation between S&P 500 Daily Returns and Daily Infection Rate Percentage Change.**
+
+```{r,echo=FALSE}
+infection_rate_df <- US_Covid_Overall[,c("date", "InfectionRatePercChange", "DailyPositiveCases")]
+infection_rate_df$Date <- as.Date(infection_rate_df$date, "%d-%m-%Y")
+infection_rate_df <- infection_rate_df[,-1]
+
+asset_returns_df <- sp_500_df[, c("Date", "Returns")]
+asset_returns_df$Date <- as.Date(asset_returns_df$Date)
+
+compute_corr(infection_rate_df, asset_returns_df, "InfectionRatePercChange", "2020-03-01", "2020-12-01")
+
+```
+
+
+
+
+## NASDAQ Composite
+
+Similarly, we will do the same analysis on NASDAQ data and we get a pretty similar trend. It can be seen that there is a dip around April here as well. The overall correlation value is **-0.5325548** which is almost the same as the S&P 500.
+
+
+```{r,echo=FALSE}
+nasdaq_composite <- read.csv("NASDAQ Composite.csv")
+#head(nasdaq_composite)
+```
+
+
+```{r,echo=FALSE}
+ggplot(nasdaq_composite, aes(x=as.Date(Date), y=Adj.Close)) +
+  labs(
+    title="Daily Adj.Colse From March to December",
+       x="Date", 
+    y="Adj.close")+
+  geom_line()
+```
+
+
+
+```{r,echo=FALSE}
+nasdaq_composite <- nasdaq_composite %>% mutate(Returns = Adj.Close/lag(Adj.Close, 30) - 1)
+#head(nasdaq_composite)
+```
+
+
+**Correlation between NASDAQ Daily Returns and Daily Infection Rate Percentage Change.**
+
+```{r,echo=FALSE}
+asset_returns_df <- nasdaq_composite[, c("Date", "Returns")]
+asset_returns_df$Date <- as.Date(asset_returns_df$Date)
+
+compute_corr(infection_rate_df, asset_returns_df, "InfectionRatePercChange", "2020-03-01", "2020-12-01")
+```
+
+
+
+
+## Russell 2000
+
+```{r,echo=FALSE}
+russel_2000 <- read.csv("Russel 2000.csv")
+russel_2000$Date <- as.Date(russel_2000$Date)
+russel_2000$Adj.Close <- as.numeric(russel_2000$Adj.Close)
+#head(russel_2000)
+```
+
+
+```{r,echo=FALSE}
+ggplot(russel_2000, aes(x=as.Date(Date), y=Adj.Close)) + 
+  labs(
+    title="Daily Adj.Close From March to December",
+       x="Date", 
+    y="Adj.close")+
+  geom_line()
+```
+
+
+
+```{r,echo=FALSE}
+
+russel_2000 <- russel_2000 %>% mutate(Returns = Adj.Close/lag(Adj.Close, 30) - 1)
+#head(russel_2000)
+
+```
+
+**Correlation between Russel Daily Returns and Daily Infection Rate Percentage Change.**
+
+```{r,echo=FALSE}
+asset_returns_df <- russel_2000[, c("Date", "Returns")]
+asset_returns_df$Date <- as.Date(asset_returns_df$Date)
+
+compute_corr(infection_rate_df, asset_returns_df, "InfectionRatePercChange", "2020-03-01", "2020-12-01")
+```
+
+
+
+## Crude Oil Futures
+
+```{r,echo=FALSE}
+crude_oil_futures <- read.csv("Crude Oil Futures.csv")
+crude_oil_futures <- crude_oil_futures%>% filter(Open != "null")
+crude_oil_futures$Adj.Close <- as.numeric(crude_oil_futures$Adj.Close)
+#head(crude_oil_futures)
+```
+
+
+```{r,echo=FALSE}
+ggplot(crude_oil_futures, aes(x=as.Date(Date), y=Adj.Close)) + 
+  labs(
+    title="Daily Adj.Close From March to December",
+       x="Date", 
+    y="Adj.close")+
+  geom_line()
+```
+
+```{r,echo=FALSE}
+crude_oil_futures <- crude_oil_futures %>% mutate(Returns = Adj.Close/lag(Adj.Close, 30) - 1)
+#head(crude_oil_futures)
+```
+**Correlation between Crude Oil Futures Daily Returns and Daily Infection Rate Percentage Change.**
+
+
+```{r,echo=FALSE}
+asset_returns_df <- crude_oil_futures[, c("Date", "Returns")]
+asset_returns_df$Date <- as.Date(asset_returns_df$Date)
+
+compute_corr(infection_rate_df, asset_returns_df, "InfectionRatePercChange", "2020-03-01", "2020-12-01")
+```
+
+
+Overall, we can observe that all of the US Stock indices monthly returns are negatively correlated with the monthly percentage change in infection rates for the period March 2020 to December 2020. 
+
+\newpage
+
+
+
+## Question4: 
+
+
+The client's simulation model tries to project the COVID load by sampling from a set of Poisson distributions.
+
+- In the first step, a set of means is computed using an exponential function which will further be used as "lambdas" in the sampling process from Poisson distributions.
+- The means are calculated in such a way that, for the early days of the projection the means of the Poisson distributions are close to 0 indicating the slow start of the COVID spread. as the number of days reaches the middle, the means are close to 1, indicating the highest increase in COVID spread. Towards the end, means are close to 0 again so that the curve flattens.
+- After the means are calculated, daily COVID cases are simulated by sampling from a series of Poisson distributions using the lambda's calculated above.
+- The sampled values are multiplied by 1987.32 which looks like the average number of daily cases from the historical data. 
+
+
+
+
+```{r}
+num_days = 365
+days <- 1:num_days
+lambda_sim <- exp(-0.92*((days-182)^2/51.6^2))
+
+
+W <- 1987.32*rpois(num_days,pi*lambda_sim)
+
+plot(cumsum(W), xlab = "Elapsed", ylab = "Load",
+main = 'nCov-SARS2 projected CaseLoad', pch = 16, cex = 0.75, col = "darkgrey")
+```
+
+
+
+Sensitivity Analysis
+
+Slightly changing the "-0.32" coefficient of the exponential function, changes the trend of the projection to a great extent. Bringing that value close to 0 results in a linear trend in the projection. This coefficient determines the means of the Poisson distributions used to sample daily cases. Therefore, it decides the projected rate of the spread of the disease from one day to the next. Although this model captures the exponential growth of the virus, it incorrectly projects that the spread of the virus levels off, and the number of daily cases comes close to 0 towards the end of the 365 days which is not observed from the historical data we analyzed.
+
+
+```{r,echo=FALSE}
+num_days = 365
+days <- 1:num_days
+lambda_sim <- exp(-0.02*((days-182)^2/51.6^2))
+
+
+W <- 1987.32*rpois(num_days,pi*lambda_sim)
+
+plot(cumsum(W), xlab = "Elapsed", ylab = "Load",
+main = 'nCov-SARS2 projected CaseLoad', pch = 16, cex = 0.75, col = "darkgrey")
+```
+
+
+Changing that coefficient to a value further away from 0 brings the trend of the projection to a steep exponential curve.
+
+```{r,echo=FALSE}
+num_days = 365
+days <- 1:num_days
+lambda_sim <- exp(-2*((days-182)^2/51.6^2))
+
+
+W <- 1987.32*rpois(num_days,pi*lambda_sim)
+
+plot(cumsum(W), xlab = "Elapsed", ylab = "Load",
+main = 'nCov-SARS2 projected CaseLoad', pch = 16, cex = 0.75, col = "darkgrey")
+```
+
+\newpage
+
+
+# Appendix 1 : Methodology 
+
+
+
+## Question2: US sate-wise COVID data
+
+
+
+
+```{r}
+
+USCovid <- read.csv("all-states-history.csv")
+UScovid_df <- USCovid[,c("date","state","death","hospitalized","positive","totalTestResults")]
+UScovid_df$date <- as.Date(UScovid_df$date, format="%d-%m-%Y")
+UScovid_df <- filter(UScovid_df, date >= as.Date("2020-03-01"))
+head(UScovid_df)
+```
+
+
+
+Population Data
+
+```{r}
+
+perfcarsales<- read.csv("PerfCarSales.csv")
+pop<- perfcarsales[,c("ï..State","Abb","Population")]
+pop <- pop %>% dplyr::rename(state = Abb)
+head(pop)
+```
+```{r}
+PopDensity <- read.csv("PopulationDensity.csv")
+PopDensity <- PopDensity %>% dplyr::rename(ï..State = GEO.display.label,  PopDensityPerMiles = Density.per.square.mile.of.land.area )
+PopDensity<- PopDensity[, c("ï..State", "PopDensityPerMiles")]
+
+head(PopDensity)
+
+```
+
+```{r}
+population_df <- plyr::join(pop, PopDensity, by="ï..State")
+head(population_df)
+```
+
+
+Join the population in perfcarsales to USCovid_df.
+
+```{r}
+
+
+UScovid_df <- plyr::join(UScovid_df, population_df, by = "state")
+head(UScovid_df)
+
+```
+
+Removing AS from the dataset since there are no covid cases reported.
+
+```{r}
+
+UScovid_df <- filter(UScovid_df, !(state %in% c("AS", "MP", "GU", "PR", "VI")))
+
+
+head(UScovid_df)
+
+
+
+```
+
+
+
+```{r}
+UScovid_df <- UScovid_df[,-7] 
+head(UScovid_df)
+```
+
+
+Compute infection rate, postive test rate and death rate.
+
+
+```{r}
+
+
+UScovid_df$InfectionRate <- (UScovid_df$positive/UScovid_df$Population)*100
+
+UScovid_df$PosTestRate <- (UScovid_df$positive/ UScovid_df$totalTestResults)*100
+
+UScovid_df$DeathRate <- (UScovid_df$death/ UScovid_df$positive)*100
+
+
+```
+
+
+
+
+
+Infection Rate vs Population
+
+```{r}
+infection_rate_df <- UScovid_df[,c("date", "state", "InfectionRate")]
+infection_rate_df <- infection_rate_df[order(as.numeric(rownames(infection_rate_df)), decreasing = TRUE),]
+infection_rate_df[is.na(infection_rate_df)] <- 0
+head(infection_rate_df)
+
+```
+```{r}
+sorted_population_df <- population_df[order(population_df$Population, decreasing=TRUE),]
+sorted_population_df$state <- factor(sorted_population_df$state, levels=sorted_population_df$state)
+head(sorted_population_df)
+```
+
+```{r}
+# Draw plot
+ggplot(sorted_population_df, aes(x=state, y=Population)) + 
+  geom_bar(stat="identity", width=.5, fill="tomato3") + 
+  labs(
+    title="Ordered Bar Chart",
+    subtitle="",
+    x="US States", 
+    y="Population") + 
+  theme(axis.text.x = element_text(angle=65, vjust=0.6))
+```
+
+
+Infection rate vs Population Size
+
+```{r}
+infection_rate_df_filtered <- filter(infection_rate_df, state %in% c("CA", "TX", "DC", "WY"))
+ggplot(data=infection_rate_df_filtered, aes(x=date, y=InfectionRate, colour=state)) +
+  labs(
+    title="Infection Rate Vs Date",
+    subtitle="",
+    x="Date", 
+    y="Infection Rate")+
+  geom_line()
+
+```
+
+
+
+
+Cumulative Infection Rate Vs Population Size
+
+
+```{r}
+infection_rate_with_pop <- UScovid_df[,c("date", "state", "InfectionRate", "Population")]
+cumulative_infection_rate <- filter(infection_rate_with_pop, date == as.Date("2020-12-03"))
+head(cumulative_infection_rate)
+```
+
+```{r}
+ggplot(cumulative_infection_rate)  + 
+  geom_point(aes(x=Population, y=InfectionRate, col= state)) +   # draw points
+  labs(
+    y="InfectionRate", 
+    x="Population", 
+    title="InfectionRate Vs Population" )
+```
+
+
+
+Infection Rate vs Population Density
+
+
+```{r}
+sorted_pop_density_df <- population_df[order(population_df$PopDensityPerMiles, decreasing = TRUE),]
+sorted_pop_density_df$state <- factor(sorted_pop_density_df$state, levels=sorted_pop_density_df$state)
+head(sorted_pop_density_df)
+```
+```{r}
+
+
+ggplot(sorted_pop_density_df, aes(x=state, y=PopDensityPerMiles)) + 
+  geom_bar(stat="identity", width=.5, fill="tomato3") + 
+  labs(
+    title="Population Density by States",
+    x="States", 
+    y="Population Density per Miles") + 
+  theme(axis.text.x = element_text(angle=65, vjust=0.6))
+```
+
+
+
+
+```{r}
+infection_rate_df_filtered <- filter(infection_rate_df, state %in% c("DC", "NJ", "WY", "AK"))
+ggplot(data=infection_rate_df_filtered, aes(x=date, y=InfectionRate, colour=state)) +
+   labs(
+    title="Infection Rate Vs Date",
+    x="Date", 
+    y="Infection Rate")+
+  geom_line()
+```
+
+
+
+Cumulative Infection Rate vs Population Density
+
+```{r}
+infection_rate_with_pop_density <- UScovid_df[,c("date", "state", "InfectionRate", "PopDensityPerMiles")]
+cumulative_infection_rate <- filter(infection_rate_with_pop_density, date == as.Date("2020-12-03"))
+head(cumulative_infection_rate)
+```
+
+
+
+```{r}
+# Plot
+ggplot(cumulative_infection_rate)  + 
+  geom_point(aes(x=PopDensityPerMiles, y=InfectionRate, col=state)) +   # draw points
+  xlim(0, 1500) + 
+  labs(
+    title="InfectionRate Vs PopulationDensity", 
+    y="InfectionRate", 
+    x="PopulationDensity" 
+    )
+```
+
+
+
+
+Infection rate change vs Population
+
+```{r}
+head(infection_rate_df)
+```
+
+
+```{r}
+infection_rate_df_wide <- reshape(infection_rate_df, timevar="state", idvar="date", direction="wide")
+infection_rate_df_wide[is.na(infection_rate_df_wide)] <- 0
+head(infection_rate_df_wide)
+```
+
+
+
+```{r}
+infection_rate_weekly_change <- data.frame(diff(as.matrix(infection_rate_df_wide[, -1]), lag=7))
+head(infection_rate_weekly_change)
+```
+Lets analyse the difference in weekly change in infection rates between states with high population density and low population density. 
+
+1. DC - Highest Popuation Density
+
+We can see the change of infection rate week over week is very high. This indicates a faster spread where population density is higher.
+```{r}
+hist(infection_rate_weekly_change$InfectionRate.DC, col= "cyan", xlab="Change in Infection Rate",
+        main="Weekly Change Infection Rate of DC")
+
+```
+
+
+
+```{r}
+hist(infection_rate_weekly_change$InfectionRate.NJ, col= "cyan", xlab="Change in Infection Rate",
+        main="Weekly Change Infection Rate of NJ")
+
+```
+
+```{r}
+hist(infection_rate_weekly_change$InfectionRate.WY, col= "cyan", xlab="Change in Infection Rate",
+        main="Weekly Change Infection Rate of WY")
+
+```
+
+On the other hand in states with low population density, the histogram shows that the week over week change infection rate is lower.
+
+```{r}
+hist(infection_rate_weekly_change$InfectionRate.AK, col= "cyan", xlab="Change in Infection Rate",
+        main="Weekly Change Infection Rate of AK")
+```
+`
+
+
+
+
+\newpage
+
+## Question3: US Overall COVID Dataset
+
+
+
+
+```{r}
+US_Covid_Overall <- UScovid_df %>% 
+  dplyr::group_by(date) %>% 
+  dplyr::summarise(
+    Death = sum(na.fill(death, 0)), 
+    Positive = sum(na.fill(positive, 0)), 
+    TotalTestResults = sum(na.fill(totalTestResults, 0))
+    )
+
+US_Covid_Overall <- US_Covid_Overall[order(as.Date(US_Covid_Overall$date, format="%d-%m-%Y")),]
+
+# Population 
+US_Population <- sum(population_df$Population)
+
+# Infection Rate and Death Rate
+US_Covid_Overall$InfectionRate <- US_Covid_Overall$Positive / US_Population
+US_Covid_Overall$DeathRate <- na.fill(US_Covid_Overall$Death / US_Covid_Overall$Positive, 0)
+
+# Handling "inf" values created because of division by 0
+US_Covid_Overall[which(!is.finite(US_Covid_Overall$DeathRate)), "DeathRate"] <- 0
+
+head(US_Covid_Overall)
+
+```
+Daily Positive Cases
+
+```{r}
+US_Covid_Overall <- US_Covid_Overall %>% mutate(DailyPositiveCases = (Positive - lag(Positive, 1)))
+ggplot(US_Covid_Overall, aes(x=as.Date(date, "%d-%m-%Y"), y=DailyPositiveCases)) + 
+  labs(
+    title="Daily Positve Cases",
+       x="Date", 
+    y="Daily Positive Cases")+
+  geom_line()
+```
+
+
+Daily Infection Rate Change in %
+
+```{r}
+US_Covid_Overall <- US_Covid_Overall %>% mutate(InfectionRatePercChange = InfectionRate/lag(InfectionRate, 30) - 1)
+US_Covid_Overall <- US_Covid_Overall %>% mutate(DeathPercChange = Death/lag(Death, 1) - 1)
+
+head(US_Covid_Overall)
+```
+
+```{r}
+ggplot(US_Covid_Overall, aes(x=as.Date(date, "%d-%m-%Y"), y=InfectionRatePercChange)) + 
+  labs(
+    title="% Change in Infection Rate",
+       x="Date", 
+    y="Infection Rate PercChange")+
+  geom_line()
+```
+
+```{r}
+ggplot(US_Covid_Overall, aes(x=as.Date(date, "%d-%m-%Y"), y=DeathPercChange)) + 
+  labs(
+    title=" % Change in Deaths",
+       x="Date", 
+    y="Death PercChange")+
+  geom_line()
+```
+
+
+
+
+
+S&P 500
+
+```{r}
+sp_500_df <- read.csv("SP500.csv")
+sp_500_df$Date <- as.Date(sp_500_df$Date)
+head(sp_500_df)
+```
+
+Visualize adjusted close
+
+```{r}
+ggplot(sp_500_df, aes(x=as.Date(Date), y=Adj.Close)) + 
+  labs(
+    title="Daily Adj.Close From March to December",
+       x="Date", 
+    y="Adj.close")+
+  geom_line()
+
+```
+
+Daily Returns
+
+```{r}
+sp_500_df <- sp_500_df %>% mutate(Returns = Adj.Close/lag(Adj.Close, 30) - 1)
+head(sp_500_df)
+```
+
+
+```{r}
+compute_corr <- function(infection_rate_df, asset_returns_df, col, from, to){
+  
+ infection_rate_df <- filter(infection_rate_df, as.Date(Date) >= as.Date(from), as.Date(Date) <= as.Date(to))
+ asset_returns_df <- filter(asset_returns_df, as.Date(Date) >= as.Date(from), as.Date(Date) <= as.Date(to))
+ 
+ asset_returns_df <- plyr::join(asset_returns_df, infection_rate_df, by="Date")
+ asset_returns_df <- na.omit(asset_returns_df)
+ 
+ # Normalize
+ # asset_returns_df[,col] = (asset_returns_df[,col] - mean(asset_returns_df[,col]))/sd(asset_returns_df[,col])
+ 
+ correlation <- cor(asset_returns_df[,col], asset_returns_df$Returns)
+ 
+ #print(asset_returns_df)
+ #plot(asset_returns_df[,col], asset_returns_df$Returns)
+ 
+ return(correlation)
+}
+```
+
+
+
+Correlation between S&P 500 Daily Returns and Daily Infection Rate Percentage Change.
+
+```{r}
+infection_rate_df <- US_Covid_Overall[,c("date", "InfectionRatePercChange", "DailyPositiveCases")]
+infection_rate_df$Date <- as.Date(infection_rate_df$date, "%d-%m-%Y")
+infection_rate_df <- infection_rate_df[,-1]
+
+asset_returns_df <- sp_500_df[, c("Date", "Returns")]
+asset_returns_df$Date <- as.Date(asset_returns_df$Date)
+
+compute_corr(infection_rate_df, asset_returns_df, "InfectionRatePercChange", "2020-03-01", "2020-12-01")
+
+```
+
+
+
+
+NASDAQ Composite
+
+```{r}
+nasdaq_composite <- read.csv("NASDAQ Composite.csv")
+head(nasdaq_composite)
+```
+```{r}
+ggplot(nasdaq_composite, aes(x=as.Date(Date), y=Adj.Close)) +
+  labs(
+    title="Daily Adj.Close From March to December",
+       x="Date", 
+    y="Adj.close")+
+  geom_line()
+
+```
+
+```{r}
+nasdaq_composite <- nasdaq_composite %>% mutate(Returns = Adj.Close/lag(Adj.Close, 30) - 1)
+head(nasdaq_composite)
+```
+
+Correlation between NASDAQ Daily Returns and Daily Infection Rate Percentage Change.
+
+```{r}
+asset_returns_df <- nasdaq_composite[, c("Date", "Returns")]
+asset_returns_df$Date <- as.Date(asset_returns_df$Date)
+
+compute_corr(infection_rate_df, asset_returns_df, "InfectionRatePercChange", "2020-04-01", "2020-12-01")
+```
+
+
+
+Russell 2000
+
+```{r}
+russel_2000 <- read.csv("Russel 2000.csv")
+russel_2000$Date <- as.Date(russel_2000$Date)
+russel_2000$Adj.Close <- as.numeric(russel_2000$Adj.Close)
+head(russel_2000)
+```
+
+```{r}
+
+ggplot(russel_2000, aes(x=as.Date(Date), y=Adj.Close)) + 
+  labs(
+    title="Daily Adj.Close From March to December",
+       x="Date", 
+    y="Adj.close")+
+  geom_line()
+
+```
+
+
+```{r}
+russel_2000 <- russel_2000 %>% mutate(Returns = Adj.Close/lag(Adj.Close, 30) - 1)
+head(russel_2000)
+```
+
+```{r}
+asset_returns_df <- russel_2000[, c("Date", "Returns")]
+asset_returns_df$Date <- as.Date(asset_returns_df$Date)
+
+compute_corr(infection_rate_df, asset_returns_df, "InfectionRatePercChange", "2020-04-01", "2020-12-01")
+```
+
+
+
+Crude Oil Futures
+
+```{r}
+crude_oil_futures <- read.csv("Crude Oil Futures.csv")
+crude_oil_futures <- crude_oil_futures%>% filter(Open != "null")
+crude_oil_futures$Adj.Close <- as.numeric(crude_oil_futures$Adj.Close)
+head(crude_oil_futures)
+```
+
+
+```{r}
+
+ggplot(crude_oil_futures, aes(x=as.Date(Date), y=Adj.Close)) + 
+  labs(
+    title="Daily Adj.Colse From March to December",
+       x="Date", 
+    y="Adj.close")+
+  geom_line()
+
+
+
+```
+
+```{r}
+crude_oil_futures <- crude_oil_futures %>% mutate(Returns = Adj.Close/lag(Adj.Close, 30) - 1)
+head(crude_oil_futures)
+```
+```{r}
+asset_returns_df <- crude_oil_futures[, c("Date", "Returns")]
+asset_returns_df$Date <- as.Date(asset_returns_df$Date)
+
+compute_corr(infection_rate_df, asset_returns_df, "InfectionRatePercChange", "2020-04-01", "2020-12-01")
+```
+
+
+
+## Question 4:
+
+The clients' simulation model tries to project the COVID load by sampling from a collection of poisson distributions.
+
+ - In the first step, a set of means is computed using an exponential function which will further be used as "lambdas" in the poisson distributions.
+ - The means are calculated in such a way that, for the early days of the projection the means of the poisson distributions are close to 0 indicating the slow start of the COVID spread. as the number of days reach the middle the means are close to 1, indicating highest increase in COVID spread.
+ - After the means are calculated, daily COVID cases are simulated by sampling from a series of poission distributions using the lambda's calculated above.
+ - The sampled values are multiplied by 1987.32 which looks like the average number of daily cases from the data. 
+
+
+
+```{r}
+num_days = 365
+days <- 1:num_days
+lambda_sim <- exp(-0.32*((days-182)^2/51.6^2))
+#plot(lambda_sim)
+
+W <- 1987.32*rpois(num_days,pi*lambda_sim)
+
+plot(cumsum(W), xlab = "Elapsed", ylab = "Load",
+main = 'nCov-SARS2 projected CaseLoad', pch = 16, cex = 0.75, col = "darkgrey")
+```
+
+Sensitivity Analysis
+
+Slightly changing the "-0.32" coefficient of the exponential function, changes the trend of the projection to a great extent. Bringing that value close to 0 results in a linear trend in the projection. This coefficient determines the means of the Poisson distributions used to sample daily cases. Therefore, it decides the projected rate of the spread of the disease from one day to the next. Although this model captures the exponential growth of the virus, it incorrectly projects that the spread of the virus levels off, and the number of daily cases comes close to 0 towards the end of the 365 days which is not observed from the historical data we analyzed.
+
+
+```{r}
+num_days = 365
+days <- 1:num_days
+lambda_sim <- exp(-0.32*((days-182)^2/51.6^2))
+
+
+W <- 1987.32*rpois(num_days,pi*lambda_sim)
+
+plot(cumsum(W), xlab = "Elapsed", ylab = "Load",
+main = 'nCov-SARS2 projected CaseLoad', pch = 16, cex = 0.75, col = "darkgrey")
+```
+
+
+Changing that coefficient to a value further away from 0, brings the trend of the projetion to a steep exponential curve.
+
+
+```{r}
+num_days = 365
+days <- 1:num_days
+lambda_sim <- exp(-2*((days-182)^2/51.6^2))
+
+
+W <- 1987.32*rpois(num_days,pi*lambda_sim)
+
+plot(cumsum(W), xlab = "Elapsed", ylab = "Load",
+main = 'nCov-SARS2 projected CaseLoad', pch = 16, cex = 0.75, col = "darkgrey")
+```
+
+
+
+
+
